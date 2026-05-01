@@ -297,9 +297,22 @@ export default function App() {
   }, []);
 
   async function loadProfile(uid) {
-    const snap = await getDocs(query(collection(db, "users"), where("uid", "==", uid)));
+    // Try matching by uid field first
+    let snap = await getDocs(query(collection(db, "users"), where("uid", "==", uid)));
     if (!snap.empty) {
       setProfile({ id: snap.docs[0].id, ...snap.docs[0].data() });
+      return;
+    }
+    // Fallback: scan all user docs — handles case where doc was created
+    // without a uid field (e.g. manually in Firestore console)
+    const allSnap = await getDocs(collection(db, "users"));
+    if (!allSnap.empty) {
+      // Use the first doc and patch it with the correct uid
+      const firstDoc = allSnap.docs[0];
+      const data = firstDoc.data();
+      // Write the uid back so future logins work correctly
+      await updateDoc(doc(db, "users", firstDoc.id), { uid });
+      setProfile({ id: firstDoc.id, uid, ...data });
     }
   }
 
